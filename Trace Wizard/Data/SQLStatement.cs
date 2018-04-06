@@ -42,6 +42,8 @@ namespace TraceWizard.Data
         }
 
         public long LineNumber;
+        public long CursorNumber;
+        public string Name;
         public double Duration
         {
             get
@@ -194,6 +196,8 @@ namespace TraceWizard.Data
         public int Type;
         public string TypeString;
         public int Length;
+        public int Precision;
+        public int Scale;
         public string Value;
     }
 

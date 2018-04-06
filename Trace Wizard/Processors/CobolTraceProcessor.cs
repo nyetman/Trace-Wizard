@@ -14,11 +14,26 @@ namespace TraceWizard.Processors
         public List<SQLStatement> Statements;
         private SQLStatement currentStatement;
 
-        Regex lineValid = new Regex("(CEX Stmt=)|(COM Stmt=)|(Bind position=\\d+)|(Fetch)|(EXE)|(EPO)|(ERR)");
+        Regex lineNumberMarker = new Regex("^\\d+:\\d+:\\d+.\\d+\\s*(\\d+)");
+        Regex lineValid = new Regex("(CEX Stmt=)|(COM Stmt=)|(GETSTMT Stmt=)|(GETSTMT Stmt\\(cached\\)=)|(Bind position=\\d+)|(Bind-\\d+)|(Fetch)|(EXE)|(EPO)|(ERR)");
         Regex newStatement = new Regex("RC=(\\d+)\\s+(COM|CEX) Stmt=(.*)");
         Regex execStatement = new Regex("RC=(\\d+)\\s+EXE");
         Regex fetchStatement = new Regex("RC=(\\d+)\\s+Fetch");
-        Regex bindStatement = new Regex("Bind position=(\\d+), type=(.+), length=(\\d+), value=(.*)");
+		/* Binds are in the trace three different ways. Like how you noticed it:
+		     Bind position=(\\d+), type=(.+), length=(\\d+), value=(.*)
+		    But also like this for type=SQLPBUF, SQLPSSH, SQLPSLO, SQLPDTE
+		     Bind-(\\d+), type=(\\d+), length=(\\d+), value=(.*) 
+			And like this for type=SQLPSPD
+			 Bind-(\\d+), type=(\\d+), precision=(\\d+), scale=(\\d+), value=(.*) 
+			I haven't come across any other types yet.
+			So I created 3 Regexes. The first to get the type. And the 2 after that for getting the value depending on type.
+			I also updated the SQLBindValue Class to include the new properties Precision and Scale.
+		*/
+        Regex bindStatementType = new Regex("Bind(\\sposition=|-)(\\d+), type=(\\w+)");
+		Regex bindStatementValue = new Regex("length=(\\d+), value=(.*)");
+		Regex bindStatementSQLPSPDValue = new Regex("precision=(\\d+), scale=(\\d+), value=(.*)");
+        /* Get Cursor number */
+        Regex cursorNumberMarker = new Regex("^\\d+:\\d+:\\d+.\\d+\\s+\\d+\\s+\\d+\\.\\d+\\s+\\d+\\.\\d+\\s+\\#(\\d+)");
         Regex errorLine = new Regex("ERR rtncd=(\\d+) msg=(.*)");
         Regex errPosStatement = new Regex("EPO error pos=(\\d+)");
 
@@ -42,12 +57,16 @@ namespace TraceWizard.Processors
                 currentStatement.Context = "COBOL";
                 currentStatement.RCNumber = int.Parse(m.Groups[1].Value);
                 currentStatement.Cobol = true;
-                /* TODO: Pull line number from COBOL trace, use that instead of File line number */
-                currentStatement.LineNumber = lineNumber;
+                
+                long lineNumberFromFile = long.Parse(lineNumberMarker.Match(line).Groups[1].Value);
+                currentStatement.LineNumber = lineNumberFromFile;
+				
+				long cursorNumber = long.Parse(cursorNumberMarker.Match(line).Groups[1].Value);
+                currentStatement.CursorNumber = cursorNumber;
                 return;
             }
 
-/* TODO: Determine if there is a meaningful value to return for EXE statements */
+			/* TODO: Determine if there is a meaningful value to return for EXE statements */
             /* m = execStatement.Match(line);
             if (m.Success)
             {
@@ -69,14 +88,27 @@ namespace TraceWizard.Processors
                 return;
             }
 
-            m = bindStatement.Match(line);
+            m = bindStatementType.Match(line);
             if (m.Success)
             {
                 SQLBindValue bind = new SQLBindValue();
-                bind.Index = int.Parse(m.Groups[1].Value);
-                bind.TypeString = m.Groups[2].Value;
-                bind.Length = int.Parse(m.Groups[3].Value);
-                bind.Value = m.Groups[4].Value;
+                bind.Index = int.Parse(m.Groups[2].Value);
+                bind.TypeString = m.Groups[3].Value;
+				
+				if (m.Groups[3].Value == "SQLPSPD")
+				{
+					Match m1 = bindStatementSQLPSPDValue.Match(line);
+					bind.Precision = int.Parse(m1.Groups[1].Value);
+					bind.Scale = int.Parse(m1.Groups[2].Value);
+					bind.Value = m1.Groups[3].Value;
+				}
+				else
+				{
+					Match m1 = bindStatementValue.Match(line);
+					bind.Length = int.Parse(m1.Groups[1].Value);
+					bind.Value = m1.Groups[2].Value;
+				}
+                
                 currentStatement.BindValues.Add(bind);
                 return;
             }

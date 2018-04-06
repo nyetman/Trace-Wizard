@@ -150,6 +150,6 @@ namespace TraceWizard.Data
 
     public enum ExecutionCallType
     {
-        NORMAL,EXTERNAL,CALL, SQL
+        NORMAL,EXTERNAL,CALL,SQL,COBOLSQL
     }
 }

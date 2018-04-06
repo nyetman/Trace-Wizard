@@ -48,7 +48,8 @@ namespace TraceWizard.Processors
 
             List<ITraceProcessor> Processors = new List<ITraceProcessor>
             {
-                new CobolTraceProcessor(),
+                //new CobolTraceProcessor(),
+                new CobolExecutionPathProcessor(),
                 new SQLProcessor(),
                 new StackTraceProcessor(),
 

@@ -45,6 +45,10 @@ namespace TraceWizard.UI
                 // explain SQL statement
                 var sql = (SQLStatement)item;
                 lines.Add("Line #" + sql.LineNumber);
+                if (sql.Name != "")
+                {
+                    lines.Add("Name: " + sql.Name);
+                }
                 lines.Add("Statement: " + sql.Statement);
                 lines.Add(String.Format("Duration: {0}, Execute: {1}, Fetch: {2}.", sql.Duration, sql.ExecTime, sql.FetchTime));
                 lines.Add("Fetched " + sql.FetchCount + " rows.");
