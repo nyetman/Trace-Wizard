@@ -49,18 +49,6 @@ namespace TraceWizard.Processors
         long _sqlExecCallCount;
         long _sqlExceptionCount;
 
-        Regex contextMarker = new Regex("PSAPPSRV\\.\\d+ \\(\\d+\\)");
-        Regex startMarker = new Regex(">>> start\\s+Nest=(\\d+)\\s+(.*)");
-        Regex startExtMarker = new Regex(">>> start-ext\\sNest=(\\d+)\\s(.*)");
-        Regex endMarker = new Regex("<<< end\\s+Nest=(\\d+)\\s+(.*?)\\s+Dur=(\\d+\\.\\d+)");
-        Regex endExtMarker = new Regex("<<< end-ext\\s+Nest=(\\d+)\\s+(.*?)\\s+Dur=(\\d+\\.\\d+)");
-        Regex callMarker = new Regex("(\\d+\\.\\d+)(\\s+)call\\s+(.*?)\\s+(.*)");
-        Regex sqlStatement = new Regex("RC=(\\d+) Dur=(\\d+\\.\\d+) COM Stmt=(.*)");
-        Regex ppcExceptionStatement = new Regex("ErrorReturn->(.*)");
-        Regex parameterStatement = new Regex("\\s+[^=]+\\=\\[^=]*");
-
-        Regex resumeMarker = new Regex(">>> resume\\s+Nest=(\\d+)\\s+(.*)");
-        Regex reendMarker = new Regex(">>> reend\\s+Nest=(\\d+)\\s+(.*)");
 
         Regex newStatement = new Regex("^\\d+:\\d+:\\d+.\\d+\\s*(\\d+).*#(\\d+).*(COM|CEX) Stmt=(.*)");
         Regex statementName = new Regex("GETSTMT Stmt(\\(cached\\)|)=(\\w+)");
@@ -182,7 +170,7 @@ namespace TraceWizard.Processors
         private void addToChain(ExecutionCall call, long stopLineNumber)
         {
             allCalls.Add(call);
-            //call.Duration = Double.Parse(m.Groups[1].Value);
+            
             if (callChain.Count > 0 && callChain.Peek().indentCount == call.indentCount)
             {
                 var popped = callChain.Pop();
@@ -218,56 +206,7 @@ namespace TraceWizard.Processors
 
         public void ProcessLine(string line, long lineNumber)
         {
-            if (0 == 1)
-            {
-                /*if (contextMarker.IsMatch(line) == false)
-                {
-                    return;
-                }
-                var currentContextString = contextMarker.Match(line).Groups[0].Value;*/
-
-                /*var match = callMarker.Match(line);
-                if (match.Success)
-                {
-                    _sqlExecCallCount++;
-                    var call = new ExecutionCall() { Context = currentContextString, Type = ExecutionCallType.CALL, StartLine = lineNumber, Function = match.Groups[3].Value + ": " + match.Groups[4].Value, indentCount = match.Groups[2].Value.Length };
-                    allCalls.Add(call);
-                    call.Duration = Double.Parse(match.Groups[1].Value);
-                    if (callChain.Count > 0 && callChain.Peek().indentCount == call.indentCount)
-                    {
-                        var popped = callChain.Pop();
-                        if (popped.StopLine == 0)
-                        {
-                            popped.StopLine = lineNumber;
-                        }
-                    }
-
-                    if (callChain.Count > 0 && callChain.Peek().Type == ExecutionCallType.CALL)
-                    {
-                        while(callChain.Count > 0 && callChain.Peek().indentCount >= call.indentCount)
-                        {
-                            var popped = callChain.Pop();
-                            if (popped.StopLine == 0)
-                            {
-                                popped.StopLine = lineNumber;
-                            }
-                        }
-                    }
-
-                    if (callChain.Count > 0)
-                    {
-                        callChain.Peek().Children.Add(call);
-                        call.Parent = callChain.Peek();
-                    }
-                    if (callChain.Count == 0)
-                    {
-                        executionCalls.Add(call);
-                    }
-                    callChain.Push(call);
-                    return;
-                }*/
-            }
-
+            
             if (lineValid.IsMatch(line) == false)
             {
                 _prevLine = line;
@@ -277,10 +216,6 @@ namespace TraceWizard.Processors
 
             Match m = newStatement.Match(line);
 
-            //if (!m.Success)
-            //{
-            //    m = cursorCommit.Match(line);
-            //}
             if (m.Success)
             {
 
@@ -320,6 +255,26 @@ namespace TraceWizard.Processors
                 _prevLine = line;
                 return;
             }
+
+            //Check for cursorCommit
+            //m = cursorCommit.Match(line);
+
+            //if (m.Success)
+            //{
+            //    var commitStatement = new SQLStatement(m.Groups[4].Value);
+            //    commitStatement.Context = "COBOL";
+            //    commitStatement.CursorNumber = int.Parse(m.Groups[2].Value);
+            //    commitStatement.Cobol = true;
+            //    commitStatement.LineNumber = long.Parse(m.Groups[1].Value);
+
+            //    _sqlExecCallCount++;
+            //    var call = new ExecutionCall() { Context = "Cursor: " + m.Groups[2].Value + " Line Number: " + m.Groups[1].Value, Type = ExecutionCallType.COBOLSQL, StartLine = lineNumber, Function = m.Groups[4].Value, indentCount = int.Parse(m.Groups[2].Value), SQLStatement = commitStatement };
+
+            //    addToChain(call, lineNumber);
+
+            //    _prevLine = line;
+            //    return;
+            //}
 
             //Check for cursor Disconecct
             m = cursorDisconnect.Match(line);
@@ -402,171 +357,6 @@ namespace TraceWizard.Processors
                 return;
             }
             
-            var match = startMarker.Match(line);
-
-            if (match.Success == false)
-            {
-                match = resumeMarker.Match(line);
-            }
-            /* Start marker, or Resume Marker */
-            if (match.Success)
-            {
-                _sqlExecCallCount++;
-                // we have the start of a function
-                var call = new ExecutionCall() { Context = "", Type = ExecutionCallType.NORMAL, StartLine = lineNumber, Nest = match.Groups[1].Value, Function = match.Groups[2].Value };
-                allCalls.Add(call);
-                if (callChain.Count == 0)
-                {
-                    executionCalls.Add(call);
-                }
-                callChain.Push(call);
-
-                if (callChain.Count > _maxCallDepth)
-                {
-                    _maxCallDepth = callChain.Count;
-                }
-
-                return;
-            }
-
-            match = endMarker.Match(line);
-            if (match.Success == false)
-            {
-                match = reendMarker.Match(line);
-            }
-            /* end marker or reend marker */
-            if (match.Success)
-            {
-                // we've reached the end of a call, we need to find it in the list and mark the ending line
-                var nest = match.Groups[1].Value;
-                var func = match.Groups[2].Value;
-                var dur = match.Groups.Count == 4 ? match.Groups[3].Value : "0";
-
-                bool callFound = false;
-                ExecutionCall call = null;
-                while (callFound == false)
-                {
-                    call = callChain.Pop();
-                    if (call.Nest == nest && call.Function == func)
-                    {
-                        callFound = true;
-                        call.StopLine = lineNumber;
-                        call.Duration = Double.Parse(dur);
-                    }
-
-                }
-
-                if (nest.Equals("00") == false && callChain.Count > 0)
-                {
-                    /* If we are a nested call, and there are calls on the call chain *
-                     * then we should associate the current call with its parent      *
-                     */
-                    var parent = callChain.Peek();
-                    parent.Children.Add(call);
-                    call.Parent = parent;
-                }
-                return;
-            }
-
-            if (0 == 1)
-            {
-                //match = startExtMarker.Match(line);
-                //if (match.Success)
-                //{
-                //    _sqlExecCallCount++;
-                //    // we have the start of a function
-                //    var call = new ExecutionCall() { Context = "", Type = ExecutionCallType.EXTERNAL, StartLine = lineNumber, Nest = match.Groups[1].Value, Function = match.Groups[2].Value };
-                //    allCalls.Add(call);
-                //    if (callChain.Count == 0)
-                //    {
-                //        executionCalls.Add(call);
-                //    }
-
-                //    /* test */
-                //    if (callChain.Count > 0 && callChain.Peek().Type == ExecutionCallType.CALL)
-                //    {
-                //        var parent = callChain.Pop();
-                //        if (parent.StopLine == 0)
-                //        {
-                //            parent.StopLine = lineNumber;
-                //        }
-                //        parent.Children.Add(call);
-                //        call.Parent = parent;
-                //    }
-
-                //    callChain.Push(call);
-                //    if (callChain.Count > _maxCallDepth)
-                //    {
-                //        _maxCallDepth = callChain.Count;
-                //    }
-
-                //    return;
-                //}
-
-                //match = endExtMarker.Match(line);
-                //if (match.Success)
-                //{
-                //    // we've reached the end of a call, we need to find it in the list and mark the ending line
-                //    var nest = match.Groups[1].Value;
-                //    var func = match.Groups[2].Value;
-                //    var dur = match.Groups[3].Value;
-
-                //    if (callChain.Count > 0 && callChain.Peek().Type == ExecutionCallType.CALL)
-                //    {
-                //        while (callChain.Peek().Type == ExecutionCallType.CALL || callChain.Peek().Nest != nest)
-                //        {
-                //            var popped = callChain.Pop();
-                //            if (popped.StopLine == 0)
-                //            {
-                //                popped.StopLine = lineNumber;
-                //            }
-                //        }
-                //    }
-
-                //    //var call = executionCalls.Where(p => p.Context.Equals(currentContextString) && p.Nest.Equals(nest) && p.Function.Equals(func) && p.StopLine == 0).First<ExecutionCall>();
-                //    var call = callChain.Pop();
-                //    call.StopLine = lineNumber;
-                //    call.Duration = Double.Parse(dur);
-                //}
-
-                //match = sqlStatement.Match(line);
-                //if (match.Success)
-                //{
-                //    var sqlCall = new ExecutionCall() {Context= "", Type = ExecutionCallType.SQL, StartLine = lineNumber, StopLine = lineNumber, Function = "SQL" };
-                //    allCalls.Add(sqlCall);
-                //    if (callChain.Count > 0)
-                //    {
-                //        sqlCall.Parent = callChain.Peek();
-                //        callChain.Peek().Children.Add(sqlCall);
-                //    } else
-                //    {
-                //        executionCalls.Add(sqlCall);
-                //    }
-                //    sqlCalls.Add(sqlCall);
-                //    return;
-                //}
-                //match = ppcExceptionStatement.Match(line);
-                //if (match.Success)
-                //{
-                //    _sqlExceptionCount++;
-                //    var exception = new PPCException() { Message = match.Groups[1].Value };
-                //    if (callChain.Count > 0)
-                //    {
-                //        var call = callChain.Peek();
-                //        call.PPCException = exception;
-                //        call.IsError = true;
-                //        var parent = call.Parent;
-                //        while (parent != null)
-                //        {
-                //            parent.HasError = true;
-                //            parent = parent.Parent;
-                //        }
-                //    }
-
-
-                //}
-            }
-
             _prevLine = line;
             return;
         }
